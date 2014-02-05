@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<project type="activity" builder="java">
+  <name>Street View Panorama</name>
+  <description>
+Runs Google Street View.
+  </description>
+
+  <identifyingName>com.endpoint.lg.streetview.pano</identifyingName>
+  <version>1.0.0.dev</version>
+
+  <resources>
+    <resource destinationDirectory="webapp/js/lib/jquery"
+      sourceFile="${project.home}/../resources/web/js/external/jquery/jquery-2.0.3.min.js" />
+    <resource destinationDirectory="webapp/js/lib/require"
+      sourceFile="${project.home}/../resources/web/js/external/require/require.min.js" />
+    <resource destinationDirectory="webapp/js/lib/require"
+      sourceFile="${project.home}/../resources/web/js/external/require/async.js" />
+    <resource destinationDirectory="webapp/js/lib/stapes"
+      sourceFile="${project.home}/../resources/web/js/external/stapes/stapes.min.js" />
+    <resource destinationDirectory="webapp/js/is"
+      sourceDirectory="${project.home}/../resources/web/js/is" />
+    <resource destinationDirectory="webapp/js/common"
+      sourceDirectory="${project.home}/../resources/web/js/common" />
+    <resource destinationDirectory="webapp/js/streetview"
+      sourceDirectory="${project.home}/../resources/web/js/streetview" />
+  </resources>
+
+  <deployments>
+    <deployment type="testdeploy" location="${deployment.test.deploy}" />
+    <deployment type="testimport" location="${deployment.test.import}" />
+  </deployments>
+</project>
