@@ -26,6 +26,11 @@ import com.endpoint.lg.streetview.pano.StreetviewConfiguration;
 import java.io.OutputStream;
 import java.io.IOException;
 
+/**
+ * A handler for serving the Street View configuration to the browser.
+ * 
+ * @author Matt Vollrath <matt@endpoint.com>
+ */
 public class StreetviewConfigurationWebHandler implements HttpDynamicRequestHandler {
   private StreetviewConfiguration configuration;
 
@@ -33,10 +38,18 @@ public class StreetviewConfigurationWebHandler implements HttpDynamicRequestHand
     this.configuration = configuration;
   }
 
-  @Override
+  /**
+   * Handles all requests by responding with a generated JavaScript
+   * representation of the configuraton.
+   * 
+   * @param request
+   *          the HTTP request
+   * @param response
+   *          the HTTP response
+   */
   public void handle(HttpRequest request, HttpResponse response) {
     OutputStream out = response.getOutputStream();
-    
+
     try {
       out.write(String.format("var config = %s;", configuration.toString()).getBytes());
     } catch (IOException e) {
