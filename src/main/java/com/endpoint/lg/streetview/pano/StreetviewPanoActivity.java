@@ -120,7 +120,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
         StreetviewPov pov = new StreetviewPov(data);
 
         model.setPov(pov);
-        ros.sendPov(pov, false);
+        ros.sendPov(pov);
       }
     }
   }
@@ -134,7 +134,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
         StreetviewPano pano = new StreetviewPano(data);
 
         model.setPano(pano);
-        ros.sendPano(pano, false);
+        ros.sendPano(pano);
       }
     }
   }
@@ -161,8 +161,8 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
       if (!isMaster()) {
         ros.sendRefresh();
       } else {
-        ros.sendPov(model.getPov(), true);
-        ros.sendPano(model.getPano(), true);
+        ros.sendPov(model.getPov());
+        ros.sendPano(model.getPano());
       }
     }
   }
@@ -182,12 +182,10 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
    */
   private class RosPovHandler implements RosMessageHandler {
     public void handleMessage(JsonNavigator json) {
-      if (!isMaster() || json.getBoolean(StreetviewRos.FIELD_ECHO)) {
-        StreetviewPov pov = new StreetviewPov(json);
+      StreetviewPov pov = new StreetviewPov(json);
 
-        model.setPov(pov);
-        websocket.sendPov(pov);
-      }
+      model.setPov(pov);
+      websocket.sendPov(pov);
     }
   }
 
@@ -196,12 +194,10 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
    */
   private class RosPanoHandler implements RosMessageHandler {
     public void handleMessage(JsonNavigator json) {
-      if (!isMaster() || json.getBoolean(StreetviewRos.FIELD_ECHO)) {
-        StreetviewPano pano = new StreetviewPano(json);
+      StreetviewPano pano = new StreetviewPano(json);
 
-        model.setPano(pano);
-        websocket.sendPano(pano);
-      }
+      model.setPano(pano);
+      websocket.sendPano(pano);
     }
   }
 
@@ -212,8 +208,8 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
   private class RosRefreshHandler implements RosMessageHandler {
     public void handleMessage(JsonNavigator json) {
       if (isMaster()) {
-        ros.sendPov(model.getPov(), false);
-        ros.sendPano(model.getPano(), false);
+        ros.sendPov(model.getPov());
+        ros.sendPano(model.getPano());
       }
     }
   }
@@ -287,7 +283,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
       if (yaw != 0) {
         StreetviewPov pov = model.getPov();
         pov.translate(yaw, 0);
-        ros.sendPov(pov, true);
+        ros.sendPov(pov);
       }
 
       // movement can be either forwards or backwards, depending on whether the
@@ -323,7 +319,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
     StreetviewLink nearest = model.getLinks().getNearestLink(heading);
 
     if (nearest != null)
-      ros.sendPano(new StreetviewPano(nearest.getPano()), true);
+      ros.sendPano(new StreetviewPano(nearest.getPano()));
   }
 
   private void moveForward() {

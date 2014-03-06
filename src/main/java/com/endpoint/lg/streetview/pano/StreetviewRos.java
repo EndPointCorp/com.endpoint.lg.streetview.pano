@@ -43,13 +43,9 @@ public class StreetviewRos extends RosMessageHandlers {
   /**
    * Sends a <code>StreetviewPov</code> to the route. If echo is true, the
    * message will be flagged to be ignored by the master.
-   * 
-   * @param echo
-   *          if true, do not echo to master
    */
-  public void sendPov(StreetviewPov pov, boolean echo) {
+  public void sendPov(StreetviewPov pov) {
     JsonBuilder message = pov.getJsonBuilder();
-    message.put(FIELD_ECHO, echo);
 
     activity.sendOutputJsonBuilder(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_POV, message);
   }
@@ -57,13 +53,9 @@ public class StreetviewRos extends RosMessageHandlers {
   /**
    * Sends a <code>StreetviewPano</code> to the route. If echo is true, the
    * message will be flagged to be ignored by the master.
-   * 
-   * @param echo
-   *          if true, do not echo to master
    */
-  public void sendPano(StreetviewPano pano, boolean echo) {
+  public void sendPano(StreetviewPano pano) {
     JsonBuilder message = pano.getJsonBuilder();
-    message.put(FIELD_ECHO, echo);
 
     activity.sendOutputJsonBuilder(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_PANO, message);
   }
