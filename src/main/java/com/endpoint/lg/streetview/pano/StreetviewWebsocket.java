@@ -40,7 +40,8 @@ public class StreetviewWebsocket extends WebsocketMessageHandlers {
   }
 
   /**
-   * Sends a <code>StreetviewPov</code> to the browser, which should update its view immediately.
+   * Sends a <code>StreetviewPov</code> to the browser, which should update its
+   * view immediately.
    */
   public void sendPov(StreetviewPov pov) {
     JsonBuilder message =
@@ -51,9 +52,13 @@ public class StreetviewWebsocket extends WebsocketMessageHandlers {
   }
 
   /**
-   * Sends a <code>StreetviewPano</code> to the browser, which should update its view immediately.
+   * Sends a <code>StreetviewPano</code> to the browser, which should update its
+   * view immediately.
    */
   public void sendPano(StreetviewPano pano) {
+    if (pano.getPanoid() == null)
+      return;
+
     JsonBuilder message =
         MessageWrapper.newTypedMessage(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_PANO,
             pano.getMap());

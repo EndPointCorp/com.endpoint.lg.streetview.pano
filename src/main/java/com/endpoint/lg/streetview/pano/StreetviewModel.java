@@ -39,7 +39,7 @@ public class StreetviewModel {
   /**
    * Default panoid.
    */
-  public static final String DEFAULT_PANOID = "rERiG4FHdYnqLBqpkVOUdg";
+  public static final String DEFAULT_PANOID = null;
 
   private StreetviewPov pov;
   private StreetviewPano pano;

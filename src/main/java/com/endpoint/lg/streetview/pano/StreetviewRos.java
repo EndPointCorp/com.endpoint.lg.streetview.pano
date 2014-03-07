@@ -31,8 +31,6 @@ import com.endpoint.lg.support.message.RosMessageHandlers;
  * @author Matt Vollrath <matt@endpoint.com>
  */
 public class StreetviewRos extends RosMessageHandlers {
-  public static final String FIELD_ECHO = "echo";
-
   private BaseRoutableRosWebServerActivity activity;
 
   public StreetviewRos(BaseRoutableRosWebServerActivity activity) {
@@ -41,8 +39,7 @@ public class StreetviewRos extends RosMessageHandlers {
   }
 
   /**
-   * Sends a <code>StreetviewPov</code> to the route. If echo is true, the
-   * message will be flagged to be ignored by the master.
+   * Sends a <code>StreetviewPov</code> to the route.
    */
   public void sendPov(StreetviewPov pov) {
     JsonBuilder message = pov.getJsonBuilder();
@@ -51,10 +48,12 @@ public class StreetviewRos extends RosMessageHandlers {
   }
 
   /**
-   * Sends a <code>StreetviewPano</code> to the route. If echo is true, the
-   * message will be flagged to be ignored by the master.
+   * Sends a <code>StreetviewPano</code> to the route.
    */
   public void sendPano(StreetviewPano pano) {
+    if (pano.getPanoid() == null)
+      return;
+
     JsonBuilder message = pano.getJsonBuilder();
 
     activity.sendOutputJsonBuilder(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_PANO, message);
