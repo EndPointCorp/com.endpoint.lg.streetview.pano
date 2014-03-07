@@ -219,7 +219,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
    */
   private class RosInputEventHandler implements RosMessageHandler {
     public void handleMessage(JsonNavigator json) {
-      if (isMaster()) {
+      if (isMaster() && isActivated()) {
         InputEvent event = new InputEvent(json);
         inputState.update(event);
         inputHandlers.handleEvent(event);
