@@ -22,10 +22,12 @@ import com.endpoint.lg.support.domain.streetview.StreetviewPov;
 import com.endpoint.lg.support.domain.streetview.StreetviewPano;
 import com.endpoint.lg.support.domain.streetview.StreetviewLink;
 import com.endpoint.lg.support.domain.streetview.StreetviewLinks;
-import com.endpoint.lg.support.domain.evdev.InputEvent;
-import com.endpoint.lg.support.domain.evdev.InputDeviceState;
-import com.endpoint.lg.support.domain.evdev.InputEventHandler;
-import com.endpoint.lg.support.domain.evdev.InputEventHandlers;
+import com.endpoint.lg.support.evdev.InputEvent;
+import com.endpoint.lg.support.evdev.EventTypes;
+import com.endpoint.lg.support.evdev.EventCodes;
+import com.endpoint.lg.support.evdev.InputDeviceState;
+import com.endpoint.lg.support.evdev.InputEventHandler;
+import com.endpoint.lg.support.evdev.InputEventHandlers;
 import com.endpoint.lg.support.message.streetview.MessageTypesStreetview;
 import com.endpoint.lg.support.window.WindowInstanceIdentity;
 import com.endpoint.lg.support.window.ManagedWindow;
@@ -278,7 +280,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
      * Processes the input event state and sends updates.
      */
     public void update() {
-      double yaw = state.getAbs(InputEvent.Codes.ABS_RZ) * INPUT_SENSITIVITY;
+      double yaw = state.getAbs(EventCodes.ABS_RZ) * INPUT_SENSITIVITY;
 
       if (yaw != 0) {
         StreetviewPov pov = model.getPov();
@@ -290,7 +292,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
       // SpaceNav is moved+tilted forwards or backwards.
       double movement =
           -INPUT_SENSITIVITY
-              * (state.getAbs(InputEvent.Codes.ABS_Y) + state.getAbs(InputEvent.Codes.ABS_RX));
+              * (state.getAbs(EventCodes.ABS_Y) + state.getAbs(EventCodes.ABS_RX));
 
       if (movement > INPUT_MOVEMENT_THRESHOLD) {
         movementCounter++;
@@ -363,7 +365,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
     inputState = new InputDeviceState();
 
     inputHandlers = new InputEventHandlers();
-    inputHandlers.registerHandler(InputEvent.Types.EV_KEY, InputEventHandlers.ALL_CODES,
+    inputHandlers.registerHandler(EventTypes.EV_KEY, InputEventHandlers.ALL_CODES,
         new ButtonEventHandler());
 
     if (isMaster()) {
