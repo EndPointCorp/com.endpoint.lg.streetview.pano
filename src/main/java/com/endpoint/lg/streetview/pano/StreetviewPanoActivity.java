@@ -397,8 +397,6 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
 
   @Override
   public void onActivityActivate() {
-    // for debugging
-    getLog().info(getConfiguration().getCollapsedMap().toString());
     window.activate();
   }
 
