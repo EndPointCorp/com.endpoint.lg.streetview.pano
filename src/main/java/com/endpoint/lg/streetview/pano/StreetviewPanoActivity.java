@@ -16,8 +16,8 @@
 
 package com.endpoint.lg.streetview.pano;
 
+import com.endpoint.lg.support.message.RefreshEvent;
 import com.endpoint.lg.support.message.WebsocketMessageHandler;
-import com.endpoint.lg.support.message.RosMessageHandler;
 import com.endpoint.lg.support.domain.streetview.StreetviewPov;
 import com.endpoint.lg.support.domain.streetview.StreetviewPano;
 import com.endpoint.lg.support.domain.streetview.StreetviewLink;
@@ -26,17 +26,20 @@ import com.endpoint.lg.support.evdev.InputEventCodes;
 import com.endpoint.lg.support.message.streetview.MessageTypesStreetview;
 import com.endpoint.lg.support.window.WindowInstanceIdentity;
 import com.endpoint.lg.support.window.ManagedWindow;
-
-import interactivespaces.activity.impl.web.BaseRoutableRosWebActivity;
-import interactivespaces.service.web.server.WebServer;
-import interactivespaces.util.data.json.JsonNavigator;
-
 import com.endpoint.lg.support.evdev.InputKeyEvent;
-
 import com.endpoint.lg.support.evdev.InputAbsState;
 import com.endpoint.lg.streetview.pano.StreetviewConfigurationWebHandler;
 import com.endpoint.lg.streetview.pano.StreetviewModel;
 import com.endpoint.lg.support.window.WindowIdentity;
+
+import interactivespaces.activity.impl.web.BaseRoutableRosWebActivity;
+import interactivespaces.service.web.server.WebServer;
+import interactivespaces.util.data.json.JsonBuilder;
+import interactivespaces.util.data.json.JsonNavigator;
+
+import com.google.common.eventbus.AsyncEventBus;
+import com.google.common.eventbus.EventBus;
+import com.google.common.eventbus.Subscribe;
 
 import java.io.File;
 import java.util.Map;
@@ -85,10 +88,11 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
    */
   public static final int INPUT_MOVEMENT_COOLDOWN = 500;
 
+  private EventBus eventBus;
+
   private StreetviewConfiguration configuration;
 
   private StreetviewModel model;
-  private InputAbsState absState;
   private StreetviewWebsocket websocket;
   private StreetviewRos ros;
 
@@ -99,6 +103,15 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
 
   long lastMoveTime;
   int movementCounter;
+
+  /**
+   * Fetch the activity's EventBus.
+   * 
+   * @return the event bus
+   */
+  public EventBus getEventBus() {
+    return eventBus;
+  }
 
   /**
    * Returns true if this is the master live activity. The master has the
@@ -119,7 +132,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
         StreetviewPov pov = new StreetviewPov(data);
 
         model.setPov(pov);
-        ros.sendPov(pov);
+        ros.sendPov(model.getPov());
       }
     }
   }
@@ -133,7 +146,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
         StreetviewPano pano = new StreetviewPano(data);
 
         model.setPano(pano);
-        ros.sendPano(pano);
+        ros.sendPano(model.getPano());
       }
     }
   }
@@ -160,8 +173,8 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
       if (!isMaster()) {
         ros.sendRefresh();
       } else {
-        ros.sendPov(model.getPov());
-        ros.sendPano(model.getPano());
+        websocket.sendPov(model.getPov());
+        websocket.sendPano(model.getPano());
       }
     }
   }
@@ -173,70 +186,6 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
     public void handleMessage(String connectionId, JsonNavigator data) {
       getLog().info(
           String.format("%s: %s", data.getString("type").toUpperCase(), data.getString("message")));
-    }
-  }
-
-  /**
-   * Handles <code>StreetviewPov</code> updates from Ros.
-   */
-  private class RosPovHandler implements RosMessageHandler {
-    public void handleMessage(JsonNavigator json) {
-      StreetviewPov pov = new StreetviewPov(json);
-
-      model.setPov(pov);
-      websocket.sendPov(pov);
-    }
-  }
-
-  /**
-   * Handles <code>StreetviewPano</code> updates from Ros.
-   */
-  private class RosPanoHandler implements RosMessageHandler {
-    public void handleMessage(JsonNavigator json) {
-      StreetviewPano pano = new StreetviewPano(json);
-
-      model.setPano(pano);
-      websocket.sendPano(pano);
-    }
-  }
-
-  /**
-   * Handles Ros refresh requests. A refresh request should be handled by
-   * sending out the view state.
-   */
-  private class RosRefreshHandler implements RosMessageHandler {
-    public void handleMessage(JsonNavigator json) {
-      if (isMaster()) {
-        ros.sendPov(model.getPov());
-        ros.sendPano(model.getPano());
-      }
-    }
-  }
-
-  /**
-   * Handles <code>InputKeyEvent</code> updates from Ros.
-   */
-  private class RosKeyEventHandler implements RosMessageHandler {
-    public void handleMessage(JsonNavigator json) {
-      if (isMaster() && isActivated()) {
-        InputKeyEvent event = new InputKeyEvent(json);
-        if (event.getValue() > 0 && !linksDirty) {
-          moveForward();
-        }
-      }
-    }
-  }
-
-  /**
-   * Handles <code>InputAbsState</code> updates from Ros.
-   */
-  private class RosAbsStateHandler implements RosMessageHandler {
-    public void handleMessage(JsonNavigator json) {
-      if (isMaster() && isActivated()) {
-        if (absState.update(json)) {
-          processAbsUpdate();
-        }
-      }
     }
   }
 
@@ -256,12 +205,90 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
     ros.handleMessage(channel, message);
   }
 
+  private void moveToward(double heading) {
+    StreetviewLink nearest = model.getLinks().getNearestLink(heading);
+
+    if (nearest != null) {
+      model.setPano(new StreetviewPano(nearest.getPano()));
+      ros.sendPano(model.getPano());
+    }
+  }
+
+  private void moveForward() {
+    moveToward(model.getPov().getHeading());
+  }
+
+  private void moveBackward() {
+    moveToward(model.getPov().getHeading() - 180);
+  }
+
   /**
-   * Process EV_ABS state updates from SpaceNav reader. Check for yaw and
-   * movement.
+   * Publish a message to Ros.
    */
-  private void processAbsUpdate() {
-    double yaw = absState.getValue(InputEventCodes.ABS_RZ) * INPUT_SENSITIVITY;
+  public void publishRosMessage(String channel, JsonBuilder message) {
+    sendOutputJsonBuilder(channel, message);
+  }
+
+  /**
+   * Handle Pano updated from Ros.
+   * 
+   * @param pano
+   *          the new pano
+   */
+  @Subscribe
+  public void onRosPanoMessage(StreetviewPano pano) {
+    model.setPano(pano);
+    websocket.sendPano(model.getPano());
+  }
+
+  /**
+   * Handle POV updates from Ros.
+   * 
+   * @param pov
+   *          the new pov
+   */
+  @Subscribe
+  public void onRosPovMessage(StreetviewPov pov) {
+    model.setPov(pov);
+    websocket.sendPov(model.getPov());
+  }
+
+  /**
+   * Handles Ros refresh messages by syncing out the view state.
+   * 
+   * @param refresh
+   *          the refresh event
+   */
+  @Subscribe
+  public void onRosRefreshMessage(RefreshEvent refresh) {
+    if (isMaster()) {
+      ros.sendPov(model.getPov());
+      ros.sendPano(model.getPano());
+    }
+  }
+
+  /**
+   * Handle keyboard events from Ros.
+   * 
+   * @param event
+   *          the keyboard event
+   */
+  @Subscribe
+  public void onRosInputKeyEvent(InputKeyEvent event) {
+    if (event.getValue() > 0 && !linksDirty) {
+      moveForward();
+    }
+  }
+
+  /**
+   * Handle axis change events from Ros.
+   * 
+   * @param state
+   *          the axis state
+   */
+  @Subscribe
+  public void onRosAbsStateEvent(InputAbsState state) {
+    double yaw = state.getValue(InputEventCodes.ABS_RZ) * INPUT_SENSITIVITY;
 
     if (yaw != 0) {
       StreetviewPov pov = model.getPov();
@@ -276,8 +303,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
     // TODO: Movement in all directions.
     double movement =
         -INPUT_SENSITIVITY
-            * ((absState.getValue(InputEventCodes.ABS_Y) + absState
-                .getValue(InputEventCodes.ABS_RX)));
+            * ((state.getValue(InputEventCodes.ABS_Y) + state.getValue(InputEventCodes.ABS_RX)));
 
     if (movement > INPUT_MOVEMENT_THRESHOLD) {
       movementCounter++;
@@ -300,21 +326,6 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
     }
   }
 
-  private void moveToward(double heading) {
-    StreetviewLink nearest = model.getLinks().getNearestLink(heading);
-
-    if (nearest != null)
-      ros.sendPano(new StreetviewPano(nearest.getPano()));
-  }
-
-  private void moveForward() {
-    moveToward(model.getPov().getHeading());
-  }
-
-  private void moveBackward() {
-    moveToward(model.getPov().getHeading() - 180);
-  }
-
   /**
    * Initializes activity configuration, messaging handlers, and state.
    */
@@ -323,6 +334,9 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
     updateConfiguration();
 
     model = new StreetviewModel();
+
+    eventBus = new AsyncEventBus(getSpaceEnvironment().getExecutorService());
+    eventBus.register(this);
 
     websocket = new StreetviewWebsocket(this);
 
@@ -338,15 +352,6 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
         new WebsocketLogHandler());
 
     ros = new StreetviewRos(this);
-
-    ros.registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_POV, new RosPovHandler());
-    ros.registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_PANO, new RosPanoHandler());
-    ros.registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_REFRESH,
-        new RosRefreshHandler());
-    ros.registerHandler("key", new RosKeyEventHandler());
-    ros.registerHandler("abs", new RosAbsStateHandler());
-
-    absState = new InputAbsState();
 
     lastMoveTime = System.currentTimeMillis();
     movementCounter = 0;

@@ -16,12 +16,16 @@
 
 package com.endpoint.lg.streetview.pano;
 
-import interactivespaces.activity.impl.web.BaseRoutableRosWebServerActivity;
 import interactivespaces.util.data.json.JsonBuilder;
+import interactivespaces.util.data.json.JsonNavigator;
 
 import com.endpoint.lg.support.domain.streetview.StreetviewPano;
 import com.endpoint.lg.support.domain.streetview.StreetviewPov;
+import com.endpoint.lg.support.evdev.InputAbsState;
+import com.endpoint.lg.support.evdev.InputKeyEvent;
 import com.endpoint.lg.support.message.streetview.MessageTypesStreetview;
+import com.endpoint.lg.support.message.RefreshEvent;
+import com.endpoint.lg.support.message.RosMessageHandler;
 import com.endpoint.lg.support.message.RosMessageHandlers;
 
 /**
@@ -31,11 +35,47 @@ import com.endpoint.lg.support.message.RosMessageHandlers;
  * @author Matt Vollrath <matt@endpoint.com>
  */
 public class StreetviewRos extends RosMessageHandlers {
-  private BaseRoutableRosWebServerActivity activity;
+  private StreetviewPanoActivity activity;
 
-  public StreetviewRos(BaseRoutableRosWebServerActivity activity) {
+  public StreetviewRos(final StreetviewPanoActivity activity) {
     super(activity.getLog());
     this.activity = activity;
+
+    registerHandler("key", new RosMessageHandler() {
+      public void handleMessage(JsonNavigator json) {
+        if (!activity.isMaster() || !activity.isActivated())
+          return;
+
+        activity.getEventBus().post(new InputKeyEvent(json));
+      }
+    });
+
+    registerHandler("abs", new RosMessageHandler() {
+      public void handleMessage(JsonNavigator json) {
+        if (!activity.isMaster() || !activity.isActivated())
+          return;
+
+        activity.getEventBus().post(new InputAbsState(json));
+      }
+    });
+    
+    registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_POV, new RosMessageHandler() {
+      public void handleMessage(JsonNavigator json) {
+        activity.getEventBus().post(new StreetviewPov(json));
+      }
+    });
+    
+    registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_PANO, new RosMessageHandler() {
+      public void handleMessage(JsonNavigator json) {
+        activity.getEventBus().post(new StreetviewPano(json));
+      }
+    });
+    
+    registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_REFRESH, new RosMessageHandler() {
+      public void handleMessage(JsonNavigator json) {
+        activity.getEventBus().post(new RefreshEvent());
+      }
+    });
   }
 
   /**
@@ -44,7 +84,7 @@ public class StreetviewRos extends RosMessageHandlers {
   public void sendPov(StreetviewPov pov) {
     JsonBuilder message = pov.getJsonBuilder();
 
-    activity.sendOutputJsonBuilder(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_POV, message);
+    activity.publishRosMessage(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_POV, message);
   }
 
   /**
@@ -56,7 +96,7 @@ public class StreetviewRos extends RosMessageHandlers {
 
     JsonBuilder message = pano.getJsonBuilder();
 
-    activity.sendOutputJsonBuilder(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_PANO, message);
+    activity.publishRosMessage(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_PANO, message);
   }
 
   /**
@@ -65,6 +105,6 @@ public class StreetviewRos extends RosMessageHandlers {
   public void sendRefresh() {
     JsonBuilder message = new JsonBuilder(); // empty message
 
-    activity.sendOutputJsonBuilder(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_REFRESH, message);
+    activity.publishRosMessage(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_REFRESH, message);
   }
 }
