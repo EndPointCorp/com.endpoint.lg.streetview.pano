@@ -22,25 +22,20 @@ import com.endpoint.lg.support.domain.streetview.StreetviewPov;
 import com.endpoint.lg.support.domain.streetview.StreetviewPano;
 import com.endpoint.lg.support.domain.streetview.StreetviewLink;
 import com.endpoint.lg.support.domain.streetview.StreetviewLinks;
-import com.endpoint.lg.support.evdev.InputEvent;
-import com.endpoint.lg.support.evdev.EventTypes;
 import com.endpoint.lg.support.evdev.EventCodes;
-import com.endpoint.lg.support.evdev.InputDeviceState;
-import com.endpoint.lg.support.evdev.InputEventHandler;
-import com.endpoint.lg.support.evdev.InputEventHandlers;
 import com.endpoint.lg.support.message.streetview.MessageTypesStreetview;
 import com.endpoint.lg.support.window.WindowInstanceIdentity;
 import com.endpoint.lg.support.window.ManagedWindow;
 
 import interactivespaces.activity.impl.web.BaseRoutableRosWebActivity;
 import interactivespaces.service.web.server.WebServer;
-import interactivespaces.util.concurrency.Updateable;
-import interactivespaces.util.concurrency.UpdateableLoop;
 import interactivespaces.util.data.json.JsonNavigator;
 
+import com.endpoint.lg.support.evdev.InputKeyEvent;
+
+import com.endpoint.lg.support.evdev.InputAbsState;
 import com.endpoint.lg.streetview.pano.StreetviewConfigurationWebHandler;
 import com.endpoint.lg.streetview.pano.StreetviewModel;
-
 import com.endpoint.lg.support.window.WindowIdentity;
 
 import java.io.File;
@@ -86,15 +81,14 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
   public static final double INPUT_MOVEMENT_THRESHOLD = 1.0;
 
   /**
-   * After movement, wait this many input loop cycles before moving again.
+   * After movement, wait this many milliseconds before moving again.
    */
-  public static final int INPUT_MOVEMENT_COOLDOWN = 20;
+  public static final int INPUT_MOVEMENT_COOLDOWN = 500;
 
   private StreetviewConfiguration configuration;
 
   private StreetviewModel model;
-  private InputDeviceState inputState;
-  private InputEventHandlers inputHandlers;
+  private InputAbsState absState;
   private StreetviewWebsocket websocket;
   private StreetviewRos ros;
 
@@ -102,6 +96,9 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
 
   private boolean linksDirty = false;
   private boolean master = false;
+
+  long lastMoveTime;
+  int movementCounter;
 
   /**
    * Returns true if this is the master live activity. The master has the
@@ -217,25 +214,28 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
   }
 
   /**
-   * Handles <code>InputEvent</code> updates from Ros.
+   * Handles <code>InputKeyEvent</code> updates from Ros.
    */
-  private class RosInputEventHandler implements RosMessageHandler {
+  private class RosKeyEventHandler implements RosMessageHandler {
     public void handleMessage(JsonNavigator json) {
       if (isMaster() && isActivated()) {
-        InputEvent event = new InputEvent(json);
-        inputState.update(event);
-        inputHandlers.handleEvent(event);
+        InputKeyEvent event = new InputKeyEvent(json);
+        if (event.getValue() > 0 && !linksDirty) {
+          moveForward();
+        }
       }
     }
   }
 
   /**
-   * Handles EV_KEY input events.
+   * Handles <code>InputAbsState</code> updates from Ros.
    */
-  private class ButtonEventHandler implements InputEventHandler {
-    public void handleEvent(InputEvent event) {
-      if (event.getValue() > 0 && !linksDirty) {
-        moveForward();
+  private class RosAbsStateHandler implements RosMessageHandler {
+    public void handleMessage(JsonNavigator json) {
+      if (isMaster() && isActivated()) {
+        if (absState.update(json)) {
+          processAbsUpdate();
+        }
       }
     }
   }
@@ -257,63 +257,45 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
   }
 
   /**
-   * An updater for aggregating axial input events. This solves issues with
-   * EV_ABS repeating and POV websocket message rate.
-   * 
-   * @author Matt Vollrath <matt@endpoint.com>
+   * Process EV_ABS state updates from SpaceNav reader. Check for yaw and
+   * movement.
    */
-  private class InputUpdateable implements Updateable {
-    private InputDeviceState state;
-    private int movementCounter;
-    private int movementCooldown;
+  private void processAbsUpdate() {
+    double yaw = absState.getValue(EventCodes.ABS_RZ) * INPUT_SENSITIVITY;
 
-    /**
-     * Initializes the loop.
-     */
-    public InputUpdateable(InputDeviceState state) {
-      this.state = state;
-      movementCounter = 0;
-      movementCooldown = 0;
+    if (yaw != 0) {
+      StreetviewPov pov = model.getPov();
+      pov.translate(yaw, 0);
+      ros.sendPov(pov);
     }
 
-    /**
-     * Processes the input event state and sends updates.
-     */
-    public void update() {
-      double yaw = state.getAbs(EventCodes.ABS_RZ) * INPUT_SENSITIVITY;
+    long currentTime = System.currentTimeMillis();
 
-      if (yaw != 0) {
-        StreetviewPov pov = model.getPov();
-        pov.translate(yaw, 0);
-        ros.sendPov(pov);
-      }
+    // movement can be either forwards or backwards, depending on whether the
+    // SpaceNav is moved+tilted forwards or backwards.
+    // TODO: Movement in all directions.
+    double movement =
+        -INPUT_SENSITIVITY
+            * ((absState.getValue(EventCodes.ABS_Y) + absState.getValue(EventCodes.ABS_RX)));
 
-      // movement can be either forwards or backwards, depending on whether the
-      // SpaceNav is moved+tilted forwards or backwards.
-      double movement =
-          -INPUT_SENSITIVITY
-              * (state.getAbs(EventCodes.ABS_Y) + state.getAbs(EventCodes.ABS_RX));
+    if (movement > INPUT_MOVEMENT_THRESHOLD) {
+      movementCounter++;
+    } else if (movement < -INPUT_MOVEMENT_THRESHOLD) {
+      movementCounter--;
+    } else {
+      movementCounter = 0;
+    }
 
-      if (movement > INPUT_MOVEMENT_THRESHOLD) {
-        movementCounter++;
-      } else if (movement < -INPUT_MOVEMENT_THRESHOLD) {
-        movementCounter--;
-      } else {
-        movementCounter = 0;
-      }
-
-      if (movementCooldown > 0) {
-        movementCounter = 0;
-        movementCooldown--;
-      } else if (movementCounter > INPUT_MOVEMENT_COUNT && !linksDirty) {
-        moveForward();
-        movementCounter = 0;
-        movementCooldown = INPUT_MOVEMENT_COOLDOWN;
-      } else if (movementCounter < -INPUT_MOVEMENT_COUNT && !linksDirty) {
-        moveBackward();
-        movementCounter = 0;
-        movementCooldown = INPUT_MOVEMENT_COOLDOWN;
-      }
+    if ((currentTime - lastMoveTime) < INPUT_MOVEMENT_COOLDOWN) {
+      movementCounter = 0;
+    } else if (movementCounter > INPUT_MOVEMENT_COUNT && !linksDirty) {
+      moveForward();
+      movementCounter = 0;
+      lastMoveTime = currentTime;
+    } else if (movementCounter < -INPUT_MOVEMENT_COUNT && !linksDirty) {
+      moveBackward();
+      movementCounter = 0;
+      lastMoveTime = currentTime;
     }
   }
 
@@ -360,22 +342,13 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
     ros.registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_PANO, new RosPanoHandler());
     ros.registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_REFRESH,
         new RosRefreshHandler());
-    ros.registerHandler("evdev", new RosInputEventHandler());
+    ros.registerHandler("key", new RosKeyEventHandler());
+    ros.registerHandler("abs", new RosAbsStateHandler());
 
-    inputState = new InputDeviceState();
+    absState = new InputAbsState();
 
-    inputHandlers = new InputEventHandlers();
-    inputHandlers.registerHandler(EventTypes.EV_KEY, InputEventHandlers.ALL_CODES,
-        new ButtonEventHandler());
-
-    if (isMaster()) {
-      InputUpdateable inputUpdater = new InputUpdateable(inputState);
-
-      UpdateableLoop inputLoop = new UpdateableLoop(inputUpdater);
-      inputLoop.setFrameRate(INPUT_LOOP_FREQUENCY);
-
-      getManagedCommands().submit(inputLoop);
-    }
+    lastMoveTime = System.currentTimeMillis();
+    movementCounter = 0;
 
     File tempdir = getActivityFilesystem().getTempDataDirectory();
     WindowIdentity windowId = new WindowInstanceIdentity(tempdir.getAbsolutePath());
