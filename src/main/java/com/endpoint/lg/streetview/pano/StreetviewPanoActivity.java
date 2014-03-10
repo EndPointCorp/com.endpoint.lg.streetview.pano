@@ -57,7 +57,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
   /**
    * The dynamic configuration handler will catch requests for this file.
    */
-  public static final String CONFIG_HANDLER_PATH = "config.js";
+  public static final String CONFIG_HANDLER_PATH = "/config.js";
 
   /**
    * Coefficient of input event value to POV translation.
