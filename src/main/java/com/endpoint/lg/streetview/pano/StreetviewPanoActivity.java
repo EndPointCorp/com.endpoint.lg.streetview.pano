@@ -22,7 +22,7 @@ import com.endpoint.lg.support.domain.streetview.StreetviewPov;
 import com.endpoint.lg.support.domain.streetview.StreetviewPano;
 import com.endpoint.lg.support.domain.streetview.StreetviewLink;
 import com.endpoint.lg.support.domain.streetview.StreetviewLinks;
-import com.endpoint.lg.support.evdev.EventCodes;
+import com.endpoint.lg.support.evdev.InputEventCodes;
 import com.endpoint.lg.support.message.streetview.MessageTypesStreetview;
 import com.endpoint.lg.support.window.WindowInstanceIdentity;
 import com.endpoint.lg.support.window.ManagedWindow;
@@ -261,7 +261,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
    * movement.
    */
   private void processAbsUpdate() {
-    double yaw = absState.getValue(EventCodes.ABS_RZ) * INPUT_SENSITIVITY;
+    double yaw = absState.getValue(InputEventCodes.ABS_RZ) * INPUT_SENSITIVITY;
 
     if (yaw != 0) {
       StreetviewPov pov = model.getPov();
@@ -276,7 +276,8 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
     // TODO: Movement in all directions.
     double movement =
         -INPUT_SENSITIVITY
-            * ((absState.getValue(EventCodes.ABS_Y) + absState.getValue(EventCodes.ABS_RX)));
+            * ((absState.getValue(InputEventCodes.ABS_Y) + absState
+                .getValue(InputEventCodes.ABS_RX)));
 
     if (movement > INPUT_MOVEMENT_THRESHOLD) {
       movementCounter++;
