@@ -16,6 +16,7 @@
 
 package com.endpoint.lg.streetview.pano;
 
+import com.endpoint.lg.support.message.OutboundRosMessage;
 import com.endpoint.lg.support.message.RefreshEvent;
 import com.endpoint.lg.support.message.WebsocketMessageHandler;
 import com.endpoint.lg.support.domain.streetview.StreetviewPov;
@@ -230,6 +231,17 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
   }
 
   /**
+   * Handle outbound Ros messages.
+   * 
+   * @param message
+   *          the message to publish
+   */
+  @Subscribe
+  public void onRosOutboundMessage(OutboundRosMessage message) {
+    sendOutputJsonBuilder(message.getChannel(), message.getJsonBuilder());
+  }
+
+  /**
    * Handle Pano updated from Ros.
    * 
    * @param pano
@@ -275,6 +287,9 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
    */
   @Subscribe
   public void onRosInputKeyEvent(InputKeyEvent event) {
+    if (!isMaster() || !isActivated())
+      return;
+
     if (event.getValue() > 0 && !linksDirty) {
       moveForward();
     }
@@ -288,6 +303,9 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
    */
   @Subscribe
   public void onRosAbsStateEvent(InputAbsState state) {
+    if (!isMaster() || !isActivated())
+      return;
+
     double yaw = state.getValue(InputEventCodes.ABS_RZ) * INPUT_SENSITIVITY;
 
     if (yaw != 0) {
@@ -351,7 +369,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
     websocket.registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_LOG,
         new WebsocketLogHandler());
 
-    ros = new StreetviewRos(this);
+    ros = new StreetviewRos(eventBus, getLog());
 
     lastMoveTime = System.currentTimeMillis();
     movementCounter = 0;
