@@ -85,7 +85,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
   /**
    * After movement, wait this many milliseconds before moving again.
    */
-  public static final int INPUT_MOVEMENT_COOLDOWN = 500;
+  public static final int INPUT_MOVEMENT_COOLDOWN = 250;
 
   private EventBus eventBus;
 
