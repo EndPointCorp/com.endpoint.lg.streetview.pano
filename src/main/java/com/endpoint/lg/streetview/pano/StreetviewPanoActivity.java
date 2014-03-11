@@ -106,15 +106,6 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
   int movementCounter;
 
   /**
-   * Fetch the activity's EventBus.
-   * 
-   * @return the event bus
-   */
-  public EventBus getEventBus() {
-    return eventBus;
-  }
-
-  /**
    * Returns true if this is the master live activity. The master has the
    * authoritative POV and handles external inputs.
    * 
