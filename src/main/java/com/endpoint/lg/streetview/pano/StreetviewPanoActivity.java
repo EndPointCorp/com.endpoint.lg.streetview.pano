@@ -17,14 +17,14 @@
 package com.endpoint.lg.streetview.pano;
 
 import com.endpoint.lg.support.message.OutboundRosMessage;
+import com.endpoint.lg.support.message.OutboundWebsocketMessage;
 import com.endpoint.lg.support.message.RefreshEvent;
-import com.endpoint.lg.support.message.WebsocketMessageHandler;
+import com.endpoint.lg.support.message.WebsocketRefreshEvent;
 import com.endpoint.lg.support.domain.streetview.StreetviewPov;
 import com.endpoint.lg.support.domain.streetview.StreetviewPano;
 import com.endpoint.lg.support.domain.streetview.StreetviewLink;
 import com.endpoint.lg.support.domain.streetview.StreetviewLinks;
 import com.endpoint.lg.support.evdev.InputEventCodes;
-import com.endpoint.lg.support.message.streetview.MessageTypesStreetview;
 import com.endpoint.lg.support.window.WindowInstanceIdentity;
 import com.endpoint.lg.support.window.ManagedWindow;
 import com.endpoint.lg.support.evdev.InputKeyEvent;
@@ -35,8 +35,6 @@ import com.endpoint.lg.support.window.WindowIdentity;
 
 import interactivespaces.activity.impl.web.BaseRoutableRosWebActivity;
 import interactivespaces.service.web.server.WebServer;
-import interactivespaces.util.data.json.JsonBuilder;
-import interactivespaces.util.data.json.JsonNavigator;
 
 import com.google.common.eventbus.AsyncEventBus;
 import com.google.common.eventbus.EventBus;
@@ -116,72 +114,6 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
   }
 
   /**
-   * Handles <code>StreetviewPov</code> updates from the browser.
-   */
-  private class WebsocketPovHandler implements WebsocketMessageHandler {
-    public void handleMessage(String connectionId, JsonNavigator data) {
-      if (isMaster()) {
-        StreetviewPov pov = new StreetviewPov(data);
-
-        model.setPov(pov);
-        ros.sendPov(model.getPov());
-      }
-    }
-  }
-
-  /**
-   * Handles <code>StreetviewPano</code> updates from the browser.
-   */
-  private class WebsocketPanoHandler implements WebsocketMessageHandler {
-    public void handleMessage(String connectionId, JsonNavigator data) {
-      if (isMaster()) {
-        StreetviewPano pano = new StreetviewPano(data);
-
-        model.setPano(pano);
-        ros.sendPano(model.getPano());
-      }
-    }
-  }
-
-  /**
-   * Handles <code>StreetviewLinks</code> updates from the browser.
-   */
-  private class WebsocketLinksHandler implements WebsocketMessageHandler {
-    public void handleMessage(String connectionId, JsonNavigator data) {
-      if (isMaster()) {
-        model.setLinks(new StreetviewLinks(data));
-        linksDirty = false;
-      }
-    }
-  }
-
-  /**
-   * Handles refresh requests from the browser. If this is the master instance,
-   * the model data should be returned. Otherwise, it should be requested from
-   * the master.
-   */
-  private class WebsocketRefreshHandler implements WebsocketMessageHandler {
-    public void handleMessage(String connectionId, JsonNavigator data) {
-      if (!isMaster()) {
-        ros.sendRefresh();
-      } else {
-        websocket.sendPov(model.getPov());
-        websocket.sendPano(model.getPano());
-      }
-    }
-  }
-
-  /**
-   * Handles log messages from the browser.
-   */
-  private class WebsocketLogHandler implements WebsocketMessageHandler {
-    public void handleMessage(String connectionId, JsonNavigator data) {
-      getLog().info(
-          String.format("%s: %s", data.getString("type").toUpperCase(), data.getString("message")));
-    }
-  }
-
-  /**
    * Sends incoming web socket messages to the web socket message handlers.
    */
   @Override
@@ -215,10 +147,38 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
   }
 
   /**
-   * Publish a message to Ros.
+   * Handle outbound web socket messages.
+   * 
+   * @param message
+   *          the message to publish
    */
-  public void publishRosMessage(String channel, JsonBuilder message) {
-    sendOutputJsonBuilder(channel, message);
+  @Subscribe
+  public void onOutboundWebsocketMessage(OutboundWebsocketMessage message) {
+    sendAllWebSocketJsonBuilder(message.getJsonBuilder());
+  }
+
+  /**
+   * Handle <code>StreetviewLinks</code> updates from the browser.
+   * 
+   * @param links
+   *          updated links
+   */
+  @Subscribe
+  public void onWebsocketLinksMessage(StreetviewLinks links) {
+    model.setLinks(links);
+    linksDirty = false;
+  }
+
+  /**
+   * Handle refresh requests from web sockets.
+   * 
+   * @param refresh
+   *          the refresh event
+   */
+  @Subscribe
+  public void onWebsocketRefreshMessage(WebsocketRefreshEvent refresh) {
+    websocket.sendPano(model.getPano());
+    websocket.sendPov(model.getPov());
   }
 
   /**
@@ -228,8 +188,10 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
    *          the message to publish
    */
   @Subscribe
-  public void onRosOutboundMessage(OutboundRosMessage message) {
-    sendOutputJsonBuilder(message.getChannel(), message.getJsonBuilder());
+  public void onOutboundRosMessage(OutboundRosMessage message) {
+    if (isMaster()) {
+      sendOutputJsonBuilder(message.getChannel(), message.getJsonBuilder());
+    }
   }
 
   /**
@@ -347,18 +309,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
     eventBus = new AsyncEventBus(getSpaceEnvironment().getExecutorService());
     eventBus.register(this);
 
-    websocket = new StreetviewWebsocket(this);
-
-    websocket.registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_POV,
-        new WebsocketPovHandler());
-    websocket.registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_PANO,
-        new WebsocketPanoHandler());
-    websocket.registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_LINKS,
-        new WebsocketLinksHandler());
-    websocket.registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_REFRESH,
-        new WebsocketRefreshHandler());
-    websocket.registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_LOG,
-        new WebsocketLogHandler());
+    websocket = new StreetviewWebsocket(eventBus, getLog());
 
     ros = new StreetviewRos(eventBus, getLog());
 

@@ -16,14 +16,22 @@
 
 package com.endpoint.lg.streetview.pano;
 
+import org.apache.commons.logging.Log;
+
+import com.endpoint.lg.support.domain.streetview.StreetviewLinks;
 import com.endpoint.lg.support.domain.streetview.StreetviewPano;
 import com.endpoint.lg.support.domain.streetview.StreetviewPov;
 import com.endpoint.lg.support.message.MessageWrapper;
+import com.endpoint.lg.support.message.OutboundRosMessage;
+import com.endpoint.lg.support.message.OutboundWebsocketMessage;
+import com.endpoint.lg.support.message.WebsocketMessageHandler;
 import com.endpoint.lg.support.message.WebsocketMessageHandlers;
+import com.endpoint.lg.support.message.WebsocketRefreshEvent;
 import com.endpoint.lg.support.message.streetview.MessageTypesStreetview;
+import com.google.common.eventbus.EventBus;
 
-import interactivespaces.activity.impl.web.BaseRoutableRosWebServerActivity;
 import interactivespaces.util.data.json.JsonBuilder;
+import interactivespaces.util.data.json.JsonNavigator;
 
 /**
  * Web socket messaging interface for Street View activity. Provides methods for
@@ -32,11 +40,66 @@ import interactivespaces.util.data.json.JsonBuilder;
  * @author Matt Vollrath <matt@endpoint.com>
  */
 public class StreetviewWebsocket extends WebsocketMessageHandlers {
-  private BaseRoutableRosWebServerActivity activity;
+  private EventBus eventBus;
 
-  public StreetviewWebsocket(BaseRoutableRosWebServerActivity activity) {
-    super(activity.getLog());
-    this.activity = activity;
+  public StreetviewWebsocket(EventBus bus, Log log) {
+    super(log);
+    this.eventBus = bus;
+
+    /**
+     * Handles <code>StreetviewPov</code> updates from the browser.
+     */
+    registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_POV,
+        new WebsocketMessageHandler() {
+          public void handleMessage(String connectionId, JsonNavigator json) {
+            final String type = MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_POV;
+
+            eventBus.post(new OutboundRosMessage(type, json.getCurrentAsJsonBuilder()));
+          }
+        });
+
+    /**
+     * Handles <code>StreetviewPano</code> updates from the browser.
+     */
+    registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_PANO,
+        new WebsocketMessageHandler() {
+          public void handleMessage(String connectionId, JsonNavigator json) {
+            final String type = MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_PANO;
+
+            eventBus.post(new OutboundRosMessage(type, json.getCurrentAsJsonBuilder()));
+          }
+        });
+
+    /**
+     * Handles <code>StreetviewLinks</code> updates from the browser.
+     */
+    registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_LINKS,
+        new WebsocketMessageHandler() {
+          public void handleMessage(String connectionId, JsonNavigator json) {
+            eventBus.post(new StreetviewLinks(json));
+          }
+        });
+
+    /**
+     * Handles refresh requests from the browser.
+     */
+    registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_REFRESH,
+        new WebsocketMessageHandler() {
+          public void handleMessage(String connectionId, JsonNavigator json) {
+            eventBus.post(new WebsocketRefreshEvent());
+          }
+        });
+
+    /**
+     * Handles log messages from the browser.
+     */
+    registerHandler(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_LOG,
+        new WebsocketMessageHandler() {
+          public void handleMessage(String connectionId, JsonNavigator json) {
+            getLog().info(
+                String.format("%s: %s", json.getString("type").toUpperCase(), json.getString("message")));
+          }
+        });
   }
 
   /**
@@ -44,11 +107,11 @@ public class StreetviewWebsocket extends WebsocketMessageHandlers {
    * view immediately.
    */
   public void sendPov(StreetviewPov pov) {
-    JsonBuilder message =
+    JsonBuilder json =
         MessageWrapper.newTypedMessage(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_POV,
             pov.getMap());
 
-    activity.sendAllWebSocketJsonBuilder(message);
+    eventBus.post(new OutboundWebsocketMessage(json));
   }
 
   /**
@@ -59,10 +122,10 @@ public class StreetviewWebsocket extends WebsocketMessageHandlers {
     if (pano.getPanoid() == null)
       return;
 
-    JsonBuilder message =
+    JsonBuilder json =
         MessageWrapper.newTypedMessage(MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_PANO,
             pano.getMap());
 
-    activity.sendAllWebSocketJsonBuilder(message);
+    eventBus.post(new OutboundWebsocketMessage(json));
   }
 }
