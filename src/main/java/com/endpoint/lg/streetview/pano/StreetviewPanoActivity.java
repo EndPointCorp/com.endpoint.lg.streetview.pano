@@ -316,12 +316,10 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
     lastMoveTime = System.currentTimeMillis();
     movementCounter = 0;
 
-    File tempdir = getActivityFilesystem().getTempDataDirectory();
-    WindowIdentity windowId = new WindowInstanceIdentity(tempdir.getAbsolutePath());
+    WindowIdentity windowId = new WindowInstanceIdentity(getUuid());
 
     window = new ManagedWindow(this, windowId);
     addManagedResource(window);
-    window.startup();
   }
 
   /**
@@ -338,12 +336,12 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
 
   @Override
   public void onActivityActivate() {
-    window.activate();
+    window.setVisible(true);
   }
 
   @Override
   public void onActivityDeactivate() {
-    window.deactivate();
+    window.setVisible(false);
   }
 
   /**
