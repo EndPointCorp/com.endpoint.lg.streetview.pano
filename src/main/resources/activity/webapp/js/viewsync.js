@@ -20,6 +20,7 @@ define([ 'config', 'bigl', 'validate', 'stapes', 'socket' ], function(config,
   var ViewSyncModule = Stapes.subclass({
 
     constructor : function() {
+      this.debug = (config['space.activity.webapp.browser.debug'] == 'true');
       this.yawShift = null;
       this.pitchShift = null;
       this.remotePov = {
@@ -39,8 +40,8 @@ define([ 'config', 'bigl', 'validate', 'stapes', 'socket' ], function(config,
         return;
       }
 
-      this.yawShift = (config.yawOffset || 0) * fov.hfov;
-      this.pitchShift = (config.pitchOffset || 0) * fov.vfov;
+      this.yawShift = Number(config['lg.streetview.viewSync.yawOffset']) * fov.hfov;
+      this.pitchShift = Number(config['lg.streetview.viewSync.pitchOffset']) * fov.vfov;
 
       if (this.remotePov !== null) {
         this._applyPov(this._translatePov(this.remotePov));
@@ -63,7 +64,9 @@ define([ 'config', 'bigl', 'validate', 'stapes', 'socket' ], function(config,
     // ignore redundant sendPano
     sendPano : function(panoid) {
       if (this.remotePano != panoid) {
-        if (config.debug) L.debug('ViewSync: sendPano', panoid);
+        if (this.debug)
+          L.debug('ViewSync: sendPano', panoid);
+
         this.remotePano = pano;
         io.send('pano', {
           panoid : panoid
@@ -88,7 +91,8 @@ define([ 'config', 'bigl', 'validate', 'stapes', 'socket' ], function(config,
     // *** init()
     // should be called once to start socket communications
     init : function() {
-      if (config.debug) console.debug('ViewSync: init');
+      if (this.debug)
+        console.debug('ViewSync: init');
 
       var self = this;
 
@@ -110,7 +114,9 @@ define([ 'config', 'bigl', 'validate', 'stapes', 'socket' ], function(config,
         self._recvPov(pov);
       });
 
-      if (config.debug) console.debug('ViewSync: ready');
+      if (this.debug)
+        console.debug('ViewSync: ready');
+
       this.emit('ready');
     },
 

@@ -30,12 +30,18 @@ define(
 
         constructor: function($canvas) {
           this.$canvas = $canvas;
+          this.debug = (config['space.activity.webapp.browser.debug'] == 'true');
+          this.zoom = Number(config['lg.streetview.gapi.zoom']);
+          this.renderMode = config['lg.streetview.gapi.renderMode'];
+          this.showLinks = (config['lg.streetview.gapi.showLinks'] == 'true');
+          this.sendView = (config['lg.streetview.viewSync.send'] == 'true');
+          this.sendLinks = (config['lg.streetview.viewSync.linkCapture'] == 'true');
           this.map = null;
           this.streetview = null;
           this.meta = null;
           this.pov = null;
-          this.fov_table = this.SV_HFOV_TABLES[config.renderMode];
-          this.hfov = this.fov_table[config.zoom];
+          this.fov_table = this.SV_HFOV_TABLES[this.renderMode];
+          this.hfov = this.fov_table[this.zoom];
           this.vfov = null;
         },
 
@@ -44,7 +50,8 @@ define(
         // *** init()
         // should be called once when ready to set Maps API into motion
         init: function() {
-          if (config.debug) console.debug('StreetView: init');
+          if (this.debug)
+            console.debug('StreetView: init');
 
           var self = this;
 
@@ -70,13 +77,9 @@ define(
           // *** options for the streetview object
           var svOptions = {
               visible: true,
-              disableDefaultUI: true
+              disableDefaultUI: true,
+              linksControl: this.showLinks
           };
-
-          // *** only show links on the master display
-          if (config.master) {
-            svOptions.linksControl = true;
-          }
 
           // *** init map object
           this.map = new GMaps.Map(
@@ -94,23 +97,25 @@ define(
           this.streetview.setPov({
             heading: 0,
             pitch: 0,
-            zoom: config.zoom
+            zoom: this.zoom
           });
 
           // *** set the display mode as specified in global configuration
-          this.streetview.setOptions({ mode: config.renderMode });
+          this.streetview.setOptions({ mode: this.renderMode });
 
           // *** apply the custom streetview object to the map
           this.map.setStreetView( this.streetview );
 
-          // *** events for master only
-          if (config.master) {
+          // *** events for viewSync sender
+          if (this.sendView) {
             // *** handle view change events from the streetview object
             GMaps.event.addListener(this.streetview, 'pov_changed', function() {
               var pov = self.streetview.getPov();
 
-              self._broadcastPov(pov);
-              self.pov = pov;
+              if (!self.pov || pov.heading != self.pov.heading || pov.pitch != self.pov.pitch || pov.zoom != self.pov.zoom) {
+                self.emit('pov_changed', pov);
+                self.pov = pov;
+              }
             });
 
             // *** handle pano change events from the streetview object
@@ -118,14 +123,16 @@ define(
               var panoid = self.streetview.getPano();
 
               if (panoid != self.pano) {
-                self._broadcastPano(panoid);
+                self.emit('pano_changed', panoid);
                 self.pano = panoid;
               }
             });
-            
+          }
+
+          // *** events for viewSync linkCapture
+          if (this.sendLinks) {
             GMaps.event.addListener(this.streetview, 'links_changed', function() {
-              var links = self.streetview.getLinks();
-              self._broadcastLinks(links);
+              self.emit('links_changed', self.streetview.getLinks());
             });
           }
 
@@ -146,7 +153,9 @@ define(
 
           // *** wait for an idle event before reporting module readiness
           GMaps.event.addListenerOnce(this.map, 'idle', function() {
-            if (config.debug) console.debug('StreetView: ready');
+            if (this.debug)
+              console.debug('StreetView: ready');
+
             self.emit('ready');
           });
 
@@ -165,8 +174,8 @@ define(
           }
 
           if (panoid != this.streetview.getPano()) {
-            this.pano = panoid;
             this.streetview.setPano(panoid);
+            this.pano = panoid;
           } else {
             console.warn('StreetView: ignoring redundant setPano');
           }
@@ -180,46 +189,9 @@ define(
             return;
           }
 
-          this.streetview.setPov(pov);
-        },
-
-        // *** setHdg(heading)
-        // set just the heading of the POV, zero the pitch
-        setHdg: function(heading) {
-          if (!validate.number(heading)) {
-            L.error('StreetView: bad heading to setHdg!');
-            return;
-          }
-
-          this.setPov({ heading: heading, pitch: 0 });
-        },
-
-        // *** translatePov({yaw, pitch})
-        // translate the view by a relative pov
-        translatePov: function(abs) {
-          if (!validate.number(abs.yaw) || !validate.number(abs.pitch)) {
-            L.error('StreetView: bad abs to translatePov!');
-            return;
-          }
-
-          var pov = this.streetview.getPov();
-
-          pov.heading += abs.yaw;
-          pov.pitch   += abs.pitch;
-
-          this.streetview.setPov(pov);
-        },
-
-        // *** moveForward()
-        // move to the pano nearest the current heading
-        moveForward: function() {
-          if (config.debug) console.log('moving forward');
-          var forward = this._getForwardLink();
-          if(forward) {
-            this.setPano(forward.pano);
-            this._broadcastPano(forward.pano);
-          } else {
-            console.log("can't move forward, no links!");
+          if (!this.pov || pov.heading != this.pov.heading || pov.pitch != this.pov.pitch || pov.zoom != this.pov.zoom) {
+            this.streetview.setPov(pov);
+            this.pov = pov;
           }
         },
 
@@ -231,61 +203,9 @@ define(
           var screenratio = window.innerHeight / window.innerWidth;
           this.vfov = this.hfov * screenratio;
           this.emit('size_changed', {hfov: this.hfov, vfov: this.vfov});
-          if (config.debug) console.debug('StreetView: resize', this.hfov, this.vfov);
-        },
 
-        // *** _broadcastPov(GMaps.StreetViewPov)
-        // report a pov change to listeners
-        _broadcastPov: function(pov) {
-          this.emit('pov_changed', pov);
-        },
-
-        // *** _broadcastPano(panoid)
-        // report a pano change to listeners
-        _broadcastPano: function(panoid) {
-          this.emit('pano_changed', panoid);
-        },
-        
-        // *** _broadcastLinks(links)
-        // report links change to listeners
-        _broadcastLinks: function(links) {
-          this.emit('links_changed', links);
-        },
-
-        // *** _getLinkDifference(
-        //                         GMaps.StreetViewPov,
-        //                         GMaps.StreetViewLink
-        //                       )
-        // return the difference between the current heading and the provided link
-        _getLinkDifference: function(pov, link) {
-          var pov_heading = pov.heading;
-          var link_heading = link.heading;
-
-          var diff = link_heading - pov_heading;
-          diff = Math.abs((diff + 180) % 360 - 180);
-
-          return diff;
-        },
-
-        // *** _getForwardLink()
-        // return the link nearest the current heading
-        _getForwardLink: function() {
-          var pov = this.streetview.getPov();
-          var links = this.streetview.getLinks();
-          var len = links.length;
-          var nearest = null;
-          var nearest_difference = 360;
-
-          for(var i=0; i<len; i++) {
-            var link = links[i];
-            var difference = this._getLinkDifference(pov, link);
-            if (difference < nearest_difference) {
-              nearest = link;
-              nearest_difference = difference;
-            }
-          }
-
-          return nearest;
+          if (this.debug)
+            console.debug('StreetView: resize', this.hfov, this.vfov);
         }
       });
 

@@ -16,41 +16,28 @@
 
 package com.endpoint.lg.streetview.pano;
 
-import com.endpoint.lg.support.message.OutboundRosMessage;
-import com.endpoint.lg.support.message.OutboundWebsocketMessage;
-import com.endpoint.lg.support.message.RefreshEvent;
-import com.endpoint.lg.support.message.WebsocketRefreshEvent;
-import com.endpoint.lg.support.domain.streetview.StreetviewPov;
-import com.endpoint.lg.support.domain.streetview.StreetviewPano;
-import com.endpoint.lg.support.domain.streetview.StreetviewLink;
-import com.endpoint.lg.support.domain.streetview.StreetviewLinks;
-import com.endpoint.lg.support.evdev.InputEventCodes;
 import com.endpoint.lg.support.window.WindowInstanceIdentity;
 import com.endpoint.lg.support.window.ManagedWindow;
-import com.endpoint.lg.support.evdev.InputKeyEvent;
-import com.endpoint.lg.support.evdev.InputAbsState;
-import com.endpoint.lg.streetview.pano.StreetviewConfigurationWebHandler;
-import com.endpoint.lg.streetview.pano.StreetviewModel;
 import com.endpoint.lg.support.window.WindowIdentity;
 
 import interactivespaces.activity.impl.web.BaseRoutableRosWebActivity;
 import interactivespaces.service.web.server.WebServer;
+import interactivespaces.util.data.json.JsonBuilder;
+import interactivespaces.util.data.json.JsonNavigator;
 
-import com.google.common.eventbus.AsyncEventBus;
-import com.google.common.eventbus.EventBus;
-import com.google.common.eventbus.Subscribe;
+import com.endpoint.lg.support.message.MessageWrapper;
+import com.endpoint.lg.support.web.WebConfigHandler;
+import com.endpoint.lg.support.message.RosMessageHandler;
+import com.endpoint.lg.support.message.WebsocketMessageHandler;
+import com.endpoint.lg.support.message.RosMessageHandlers;
+import com.endpoint.lg.support.message.WebsocketMessageHandlers;
+import com.endpoint.lg.support.message.streetview.MessageTypesStreetview;
 
-import java.io.File;
 import java.util.Map;
 
 /**
- * A Street View web activity. Synchronizes view changes with other activities
- * with a master/slave architecture.
- * 
- * <p>
- * View changes from external sources (input devices) are broadcast to all
- * instances simultaneously, reducing latency between master and slaves for
- * those changes.
+ * A Street View web activity, which serves the webapp and controls the browser
+ * window in which Street View panoramas are displayed.
  * 
  * @author Matt Vollrath <matt@endpoint.com>
  */
@@ -59,66 +46,19 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
   /**
    * The dynamic configuration handler will catch requests for this file.
    */
-  public static final String CONFIG_HANDLER_PATH = "/config.js";
+  public static final String CONFIG_HANDLER_PATH = "is.config.js";
 
-  /**
-   * Coefficient of input event value to POV translation.
-   */
-  public static final double INPUT_SENSITIVITY = 0.0032;
-
-  /**
-   * Frequency of the input event aggregation loop, in Hz.
-   */
-  public static final double INPUT_LOOP_FREQUENCY = 60.0;
-
-  /**
-   * How much "momentum" on a controller is needed to move forward or backward.
-   */
-  public static final int INPUT_MOVEMENT_COUNT = 10;
-
-  /**
-   * Controller forward/backward axes must exceed this value for movement (after
-   * sensitivity).
-   */
-  public static final double INPUT_MOVEMENT_THRESHOLD = 1.0;
-
-  /**
-   * After movement, wait this many milliseconds before moving again.
-   */
-  public static final int INPUT_MOVEMENT_COOLDOWN = 250;
-
-  private EventBus eventBus;
-
-  private StreetviewConfiguration configuration;
-
-  private StreetviewModel model;
-  private StreetviewWebsocket websocket;
-  private StreetviewRos ros;
+  private WebsocketMessageHandlers wsHandlers;
+  private RosMessageHandlers rosHandlers;
 
   private ManagedWindow window;
-
-  private boolean linksDirty = false;
-  private boolean master = false;
-
-  long lastMoveTime;
-  int movementCounter;
-
-  /**
-   * Returns true if this is the master live activity. The master has the
-   * authoritative POV and handles external inputs.
-   * 
-   * @return true if master
-   */
-  public boolean isMaster() {
-    return master;
-  }
 
   /**
    * Sends incoming web socket messages to the web socket message handlers.
    */
   @Override
   public void onWebSocketReceive(String connectionId, Object d) {
-    websocket.handleMessage(connectionId, d);
+    wsHandlers.handleMessage(connectionId, d);
   }
 
   /**
@@ -126,195 +66,59 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
    */
   @Override
   public void onNewInputJson(String channel, Map<String, Object> message) {
-    ros.handleMessage(channel, message);
-  }
-
-  private void moveToward(double heading) {
-    StreetviewLink nearest = model.getLinks().getNearestLink(heading);
-
-    if (nearest != null) {
-      model.setPano(new StreetviewPano(nearest.getPano()));
-      ros.sendPano(model.getPano());
-    }
-  }
-
-  private void moveForward() {
-    moveToward(model.getPov().getHeading());
-  }
-
-  private void moveBackward() {
-    moveToward(model.getPov().getHeading() - 180);
+    rosHandlers.handleMessage(channel, message);
   }
 
   /**
-   * Handle outbound web socket messages.
+   * Registers a handler for forwarding messages from websockets to Ros.
    * 
-   * @param message
-   *          the message to publish
+   * @param handlers
+   *          the websocket handler registry
+   * @param type
+   *          the message type/channel
    */
-  @Subscribe
-  public void onOutboundWebsocketMessage(OutboundWebsocketMessage message) {
-    sendAllWebSocketJsonBuilder(message.getJsonBuilder());
+  private void relayWebsocketToRos(WebsocketMessageHandlers handlers, final String type) {
+    handlers.registerHandler(type, new WebsocketMessageHandler() {
+      public void handleMessage(String connectionId, JsonNavigator json) {
+        sendOutputJsonBuilder(type, json.getCurrentAsJsonBuilder());
+      }
+    });
   }
 
   /**
-   * Handle <code>StreetviewLinks</code> updates from the browser.
+   * Registers a handler for forwarding messages from Ros to websockets.
    * 
-   * @param links
-   *          updated links
+   * @param handlers
+   *          the Ros handler registry
+   * @param type
+   *          the message type/channel
    */
-  @Subscribe
-  public void onWebsocketLinksMessage(StreetviewLinks links) {
-    model.setLinks(links);
-    linksDirty = false;
+  private void relayRosToWebsocket(RosMessageHandlers handlers, final String type) {
+    handlers.registerHandler(type, new RosMessageHandler() {
+      public void handleMessage(JsonNavigator json) {
+        JsonBuilder message = MessageWrapper.newTypedMessage(type, json.getRoot());
+
+        sendAllWebSocketJsonBuilder(message);
+      }
+    });
   }
 
   /**
-   * Handle refresh requests from web sockets.
-   * 
-   * @param refresh
-   *          the refresh event
-   */
-  @Subscribe
-  public void onWebsocketRefreshMessage(WebsocketRefreshEvent refresh) {
-    websocket.sendPano(model.getPano());
-    websocket.sendPov(model.getPov());
-  }
-
-  /**
-   * Handle outbound Ros messages.
-   * 
-   * @param message
-   *          the message to publish
-   */
-  @Subscribe
-  public void onOutboundRosMessage(OutboundRosMessage message) {
-    if (isMaster()) {
-      sendOutputJsonBuilder(message.getChannel(), message.getJsonBuilder());
-    }
-  }
-
-  /**
-   * Handle Pano updated from Ros.
-   * 
-   * @param pano
-   *          the new pano
-   */
-  @Subscribe
-  public void onRosPanoMessage(StreetviewPano pano) {
-    model.setPano(pano);
-    websocket.sendPano(model.getPano());
-  }
-
-  /**
-   * Handle POV updates from Ros.
-   * 
-   * @param pov
-   *          the new pov
-   */
-  @Subscribe
-  public void onRosPovMessage(StreetviewPov pov) {
-    model.setPov(pov);
-    websocket.sendPov(model.getPov());
-  }
-
-  /**
-   * Handles Ros refresh messages by syncing out the view state.
-   * 
-   * @param refresh
-   *          the refresh event
-   */
-  @Subscribe
-  public void onRosRefreshMessage(RefreshEvent refresh) {
-    if (isMaster()) {
-      ros.sendPov(model.getPov());
-      ros.sendPano(model.getPano());
-    }
-  }
-
-  /**
-   * Handle keyboard events from Ros.
-   * 
-   * @param event
-   *          the keyboard event
-   */
-  @Subscribe
-  public void onRosInputKeyEvent(InputKeyEvent event) {
-    if (!isMaster() || !isActivated())
-      return;
-
-    if (event.getValue() > 0 && !linksDirty) {
-      moveForward();
-    }
-  }
-
-  /**
-   * Handle axis change events from Ros.
-   * 
-   * @param state
-   *          the axis state
-   */
-  @Subscribe
-  public void onRosAbsStateEvent(InputAbsState state) {
-    if (!isMaster() || !isActivated())
-      return;
-
-    double yaw = state.getValue(InputEventCodes.ABS_RZ) * INPUT_SENSITIVITY;
-
-    if (yaw != 0) {
-      StreetviewPov pov = model.getPov();
-      pov.translate(yaw, 0);
-      ros.sendPov(pov);
-    }
-
-    long currentTime = System.currentTimeMillis();
-
-    // movement can be either forwards or backwards, depending on whether the
-    // SpaceNav is moved+tilted forwards or backwards.
-    // TODO: Movement in all directions.
-    double movement =
-        -INPUT_SENSITIVITY
-            * ((state.getValue(InputEventCodes.ABS_Y) + state.getValue(InputEventCodes.ABS_RX)));
-
-    if (movement > INPUT_MOVEMENT_THRESHOLD) {
-      movementCounter++;
-    } else if (movement < -INPUT_MOVEMENT_THRESHOLD) {
-      movementCounter--;
-    } else {
-      movementCounter = 0;
-    }
-
-    if ((currentTime - lastMoveTime) < INPUT_MOVEMENT_COOLDOWN) {
-      movementCounter = 0;
-    } else if (movementCounter > INPUT_MOVEMENT_COUNT && !linksDirty) {
-      moveForward();
-      movementCounter = 0;
-      lastMoveTime = currentTime;
-    } else if (movementCounter < -INPUT_MOVEMENT_COUNT && !linksDirty) {
-      moveBackward();
-      movementCounter = 0;
-      lastMoveTime = currentTime;
-    }
-  }
-
-  /**
-   * Initializes activity configuration, messaging handlers, and state.
+   * Registers message relays and sets up window management.
    */
   @Override
   public void onActivitySetup() {
-    updateConfiguration();
+    wsHandlers = new WebsocketMessageHandlers(getLog());
 
-    model = new StreetviewModel();
+    relayWebsocketToRos(wsHandlers, MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_POV);
+    relayWebsocketToRos(wsHandlers, MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_PANO);
+    relayWebsocketToRos(wsHandlers, MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_LINKS);
+    relayWebsocketToRos(wsHandlers, MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_REFRESH);
 
-    eventBus = new AsyncEventBus(getSpaceEnvironment().getExecutorService());
-    eventBus.register(this);
+    rosHandlers = new RosMessageHandlers(getLog());
 
-    websocket = new StreetviewWebsocket(eventBus, getLog());
-
-    ros = new StreetviewRos(eventBus, getLog());
-
-    lastMoveTime = System.currentTimeMillis();
-    movementCounter = 0;
+    relayRosToWebsocket(rosHandlers, MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_POV);
+    relayRosToWebsocket(rosHandlers, MessageTypesStreetview.MESSAGE_TYPE_STREETVIEW_PANO);
 
     WindowIdentity windowId = new WindowInstanceIdentity(getUuid());
 
@@ -323,41 +127,36 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
   }
 
   /**
-   * Starts the web server.
+   * Starts the web configuration handler.
    */
   @Override
   public void onActivityStartup() {
     WebServer webserver = getWebServer();
-    StreetviewConfigurationWebHandler configHandler =
-        new StreetviewConfigurationWebHandler(configuration);
-
+    WebConfigHandler configHandler = new WebConfigHandler(getConfiguration());
     webserver.addDynamicContentHandler(CONFIG_HANDLER_PATH, false, configHandler);
   }
 
+  /**
+   * Shows the window when the activity is activated.
+   */
   @Override
   public void onActivityActivate() {
     window.setVisible(true);
   }
 
+  /**
+   * Hides the window when the activity is deactivated.
+   */
   @Override
   public void onActivityDeactivate() {
     window.setVisible(false);
   }
 
   /**
-   * Refreshes the configuration object on configuration updates from the
-   * master.
+   * Applies updates to the window configuration.
    */
   @Override
   public void onActivityConfigurationUpdate(Map<String, Object> update) {
-    updateConfiguration();
-  }
-
-  private void updateConfiguration() {
-    configuration = new StreetviewConfiguration(getConfiguration());
-
-    master = configuration.getBoolean("master");
-
     if (window != null)
       window.update();
   }

@@ -19,9 +19,9 @@ requirejs.config({
     // *** RequireJS Plugins
     'async': 'lib/require/async',
     // *** Dynamic Configuration
-    'config': '/config',
+    'config': '/is.config',
     // *** Common Deps
-    'bigl': 'common/bigl',
+    'bigl': 'bigl',
     //'fields': 'common/fields',
     'stapes': 'lib/stapes/stapes.min',
     'jquery': 'lib/jquery/jquery-2.0.3.min',
@@ -31,10 +31,10 @@ requirejs.config({
     'validate': 'streetview/validate',
     'is': 'is/is-1.0.0',
     'is.connect': 'is/is.connect-1.0.0',
-    'socket': 'common/socket'
+    'socket': 'socket'
   },
   shim: {
-    'config': { exports: 'config' },
+    'config': { exports: 'IS.Configuration' },
     'is': { exports: 'IS' },
     'is.connect': { exports: 'IS' },
     'googlemaps': {
@@ -83,9 +83,8 @@ function(
     viewsync.refresh();
   });
 
-  // *** modules and linkages for master display only
-  if (config.master) {
-    // *** link StretView state changes to ViewSync
+  // *** send view updates if directed
+  if (config['lg.streetview.viewSync.send'] == "true") {
     viewsync.on('ready', function() {
       sv.on('pov_changed', function(pov) {
         viewsync.sendPov(pov);
@@ -93,6 +92,12 @@ function(
       sv.on('pano_changed', function(pano) {
         viewsync.sendPano(pano);
       });
+    });
+  }
+
+  // *** send link updates if directed
+  if (config['lg.streetview.viewSync.linkCapture'] == "true") {
+    viewsync.on('ready', function() {
       sv.on('links_changed', function(links) {
         viewsync.sendLinks(links);
       });
