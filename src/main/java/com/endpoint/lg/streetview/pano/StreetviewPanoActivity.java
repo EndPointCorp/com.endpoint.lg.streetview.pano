@@ -156,7 +156,7 @@ public class StreetviewPanoActivity extends BaseRoutableRosWebActivity {
    * Applies updates to the window configuration.
    */
   @Override
-  public void onActivityConfigurationUpdate(Map<String, Object> update) {
+  public void onActivityConfiguration(Map<String, Object> update) {
     if (window != null)
       window.update();
   }
