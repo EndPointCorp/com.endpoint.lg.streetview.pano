@@ -10,19 +10,19 @@ Runs Google Street View.
 
   <resources>
     <resource destinationDirectory="webapp/js/lib/jquery"
-      sourceFile="${project.home}/../resources/web/js/external/jquery/jquery-2.0.3.min.js" />
+      sourceFile="${project.home}/../activity-resources/web/js/external/jquery/jquery-2.0.3.min.js" />
     <resource destinationDirectory="webapp/js/lib/require"
-      sourceFile="${project.home}/../resources/web/js/external/require/require.min.js" />
+      sourceFile="${project.home}/../activity-resources/web/js/external/require/require.min.js" />
     <resource destinationDirectory="webapp/js/lib/require"
-      sourceFile="${project.home}/../resources/web/js/external/require/async.js" />
+      sourceFile="${project.home}/../activity-resources/web/js/external/require/async.js" />
     <resource destinationDirectory="webapp/js/lib/stapes"
-      sourceFile="${project.home}/../resources/web/js/external/stapes/stapes.min.js" />
+      sourceFile="${project.home}/../activity-resources/web/js/external/stapes/stapes.min.js" />
     <resource destinationDirectory="webapp/js/is"
-      sourceDirectory="${project.home}/../resources/web/js/is" />
+      sourceDirectory="${project.home}/../activity-resources/web/js/is" />
     <resource destinationDirectory="webapp/js/common"
-      sourceDirectory="${project.home}/../resources/web/js/common" />
+      sourceDirectory="${project.home}/../activity-resources/web/js/common" />
     <resource destinationDirectory="webapp/js/streetview"
-      sourceDirectory="${project.home}/../resources/web/js/streetview" />
+      sourceDirectory="${project.home}/../activity-resources/web/js/streetview" />
   </resources>
 
   <deployments>
