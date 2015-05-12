@@ -191,8 +191,9 @@ define(
           }
 
           if (!this.pov || pov.heading != this.pov.heading || pov.pitch != this.pov.pitch || pov.zoom != this.pov.zoom) {
-            this.streetview.setPov(pov);
             this.pov = pov;
+                // This doesn't return
+            this.streetview.setPov(pov);
           }
         },
 

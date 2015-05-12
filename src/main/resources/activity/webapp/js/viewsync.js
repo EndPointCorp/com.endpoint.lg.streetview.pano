@@ -112,6 +112,8 @@ define([ 'config', 'bigl', 'validate', 'stapes', 'socket' ], function(config,
           return;
         }
 
+        pov.heading = parseFloat(pov.heading);
+        pov.pitch = parseFloat(pov.pitch);
         self._recvPov(pov);
       });
 
