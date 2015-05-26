@@ -4,7 +4,6 @@
   <description>
 Runs Google Street View.
   </description>
-
   <identifyingName>com.endpoint.lg.streetview.pano</identifyingName>
   <version>1.0.0.dev</version>
 
