@@ -33,6 +33,7 @@ Runs Google Street View.
     <name>comEndpointLgStreetview</name>
     <class>com.endpoint.lg.streetview.pano.StreetviewPanoActivity</class>
     <configuration>
+      <property name="space.activity.group"><value>generic</value></property>
       <property name="space.activity.log.level"><value>info</value></property>
       <property name="space.activity.webapp.content.location"><value>webapp</value></property>
       <property name="space.activity.webapp.url.initial"><value>index.html</value></property>
