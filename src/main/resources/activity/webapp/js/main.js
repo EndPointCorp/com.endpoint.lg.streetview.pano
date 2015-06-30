@@ -15,6 +15,12 @@
 ** limitations under the License.
 */
 
+requirejs.onError = function (err) {
+  console.error('Scheduling page reload...');
+  setTimeout(window.location.reload, 1000);
+  throw err;
+};
+
 requirejs.config({
   paths: {
     // *** RequireJS Plugins
