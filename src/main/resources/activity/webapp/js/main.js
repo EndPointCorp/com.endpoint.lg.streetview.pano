@@ -17,7 +17,9 @@
 
 requirejs.onError = function (err) {
   console.error('Scheduling page reload...');
-  setTimeout(window.location.reload, 1000);
+  setTimeout(function () {
+    window.location.reload();
+  }, 1000);
   throw err;
 };
 
