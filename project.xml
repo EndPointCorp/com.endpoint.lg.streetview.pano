@@ -28,4 +28,47 @@ Runs Google Street View.
     <deployment type="testdeploy" location="${deployment.test.deploy}" />
     <deployment type="testimport" location="${deployment.test.import}" />
   </deployments>
+
+  <activity type="interactivespaces_native">
+    <name>comEndpointLgStreetview</name>
+    <class>com.endpoint.lg.streetview.pano.StreetviewPanoActivity</class>
+    <configuration>
+      <property name="space.activity.group"><value>generic</value></property>
+      <property name="space.activity.log.level"><value>info</value></property>
+      <property name="space.activity.webapp.content.location"><value>webapp</value></property>
+      <property name="space.activity.webapp.url.initial"><value>index.html</value></property>
+      <property name="space.activity.webapp.browser.debug"><value>false</value></property>
+      <property name="space.activity.webapp.web.server.port"><value>9000</value></property>
+      <property name="space.activity.ros.node.name"><value>liquidgalaxy/streetview/pano/${lg.window.viewport.target}</value></property>
+      <property name="space.activity.routes.inputs"><value>pov:pano</value></property>
+      <property name="space.activity.route.input.pov"><value>/liquidgalaxy/${space.activity.group}/streetview/pov</value></property>
+      <property name="space.activity.route.input.pano"><value>/liquidgalaxy/${space.activity.group}/streetview/pano</value></property>
+      <property name="space.activity.routes.outputs"><value>pov:pano:links:refresh</value></property>
+      <property name="space.activity.route.output.pov"><value>/liquidgalaxy/${space.activity.group}/streetview/pov</value></property>
+      <property name="space.activity.route.output.pano"><value>/liquidgalaxy/${space.activity.group}/streetview/pano</value></property>
+      <property name="space.activity.route.output.links"><value>/liquidgalaxy/${space.activity.group}/streetview/links</value></property>
+      <property name="space.activity.route.output.refresh"><value>/liquidgalaxy/${space.activity.group}/streetview/refresh</value></property>
+      <property name="lg.window.viewport.target"><value>default</value></property>
+      <!-- yawOffset is units of the screen width, i.e. -->
+      <!-- 1 is a screen to the right, -1 is a screen to the left. -->
+      <!-- Floating values are allowed for bezel compensation. -->
+      <property name="lg.streetview.viewSync.yawOffset"><value>0</value></property>
+      <!-- pitchOffset is units of the screen height, i.e.
+           1 is a screen above, -1 is a screen below.
+           Floating values are allowed for bezel compensation. -->
+      <property name="lg.streetview.viewSync.pitchOffset"><value>0</value></property>
+      <!-- If send is true, the browser will send ViewSync messages.
+           This should only be enabled for the browser at yaw/pitch 0. -->
+      <property name="lg.streetview.viewSync.send"><value>false</value></property>
+      <!-- If linkCapture is true, the browser will update the master with pano links.
+           At least one browser in the group must have this enabled for input to work. -->
+      <property name="lg.streetview.viewSync.linkCapture"><value>${lg.streetview.viewSync.send}</value></property>
+      <!-- renderMode can be one of [ html4, html5, webgl ] -->
+      <property name="lg.streetview.gapi.renderMode"><value>html4</value></property>
+      <!-- Zoom must be an integer. -->
+      <property name="lg.streetview.gapi.zoom"><value>3</value></property>
+      <!-- If showLinks is true, the links will be drawn on the pano display. -->
+      <property name="lg.streetview.gapi.showLinks"><value>${lg.streetview.viewSync.linkCapture}</value></property>
+    </configuration>
+  </activity>
 </project>
